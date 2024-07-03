@@ -1,0 +1,34 @@
+{
+  "name": "varajs",
+  "module": "index.ts",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "A set of javascript bindings for the popular VARA software modem.",
+  "main": "index.js",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.14.9",
+    "typescript": "^5.5.2"
+  },
+  "scripts": {
+    "test": "tsc && node ./dist/test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/taylorsreid/varajs.git"
+  },
+  "keywords": [
+    "vara",
+    "ham",
+    "packet",
+    "radio",
+    "fm",
+    "amateur"
+  ],
+  "author": "Taylor Reid",
+  "license": "GPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/taylorsreid/varajs/issues"
+  },
+  "homepage": "https://github.com/taylorsreid/varajs#readme"
+}
