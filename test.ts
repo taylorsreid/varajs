@@ -1,6 +1,6 @@
 import { VaraBindings } from "./index.js";
 
-const vb: VaraBindings = await VaraBindings.open('127.0.0.1', 8300)
+const vb: VaraBindings = await VaraBindings.create('127.0.0.1', 8300)
 
 vb.on('command', (c) => {
     console.log(c)
@@ -10,7 +10,9 @@ vb.on('data', (d) => {
     console.log(d)
 })
 
-await vb.cqFrame('KO4LCM')
+console.time('test');
+await vb.myCall('KO4LCM', 'KO4LCM-1', 'KO4LCM-2')
+console.timeEnd('test')
 
-vb.disconnect()
+await vb.disconnect()
 vb.close()
