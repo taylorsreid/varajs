@@ -5,7 +5,6 @@
   "version": "1.0.0",
   "description": "A set of javascript bindings for the popular VARA software modem.",
   "main": "index.js",
-  "dependencies": {},
   "devDependencies": {
     "@types/node": "^20.14.9",
     "typescript": "^5.5.2"
