@@ -6,6 +6,7 @@
   "description": "A set of javascript bindings for the popular VARA software modem.",
   "main": "index.js",
   "devDependencies": {
+    "@types/bun": "^1.1.6",
     "@types/node": "^20.14.9",
     "typescript": "^5.5.2"
   },
@@ -22,6 +23,8 @@
     "packet",
     "radio",
     "fm",
+    "hf",
+    "sat",
     "amateur"
   ],
   "author": "Taylor Reid",
