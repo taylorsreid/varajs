@@ -1,14 +1,14 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { VaraBindings } from '../index.js';
+import { VaraJS } from '../index.js';
 import config from './config.test.js';
 import { spawnVara } from './setup.test.js';
 import { Socket } from 'net';
 
-let vb: VaraBindings
+let vb: VaraJS
 
 beforeAll(async () => {
     vb = await spawnVara()
-    expect(vb).toBeInstanceOf(VaraBindings)
+    expect(vb).toBeInstanceOf(VaraJS)
     // expect(vb.encoding).toBe(ENCODING) // fails in bun due to an upstream bug, but works in node
     expect(vb.connection).toBeUndefined()
     expect(vb.listening).toBeFalse()
@@ -38,8 +38,8 @@ beforeAll(async () => {
     expect(vb.encryption).toBeFalse()
     expect(vb.encryptedLink).toBeFalse()
     expect(vb.varaType).toBe(config.varaType as "HF" | "FM" | "SAT")
-    expect(vb.commandPort).toBeInstanceOf(Socket)
-    expect(vb.dataPort).toBeInstanceOf(Socket)
+    expect(vb.commandSocket).toBeInstanceOf(Socket)
+    expect(vb.dataSocket).toBeInstanceOf(Socket)
     // expect(vb.commandPort.localPort).toBe(config.PORT)
     // expect(vb.dataPort.localPort).toBe(config.PORT + 1)
 })

@@ -1,9 +1,9 @@
 import { setTimeout } from "timers/promises"
-import { createConnection, type VaraBindings } from "../index.js"
+import { createConnection, type VaraJS } from "../index.js"
 import config from "./config.test.js"
 
-export async function spawnVara(): Promise<VaraBindings> {
-    let vb: VaraBindings
+export async function spawnVara(): Promise<VaraJS> {
+    let vb: VaraJS
     Bun.spawn([config.varaPath])
     await setTimeout(config.varaStartupTimeout)
     vb = await createConnection({

@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import type { ConnectionData, VaraBindings } from "../index.js";
+import type { ConnectionData, VaraJS } from "../index.js";
 import config from "./config.test.js";
 import { spawnVara } from "./setup.test.js";
 
-let vb: VaraBindings
+let vb: VaraJS
 
 beforeAll(async () => {
     vb = await spawnVara()
