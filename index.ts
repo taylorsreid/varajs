@@ -805,7 +805,7 @@ export class VaraJS extends EventEmitter {
             else if (!csArr[0].match(/^[a-z0-9]+$/i)) {
                 error.message += `Callsign "${cs}" contains illegal characters.\n`
             }
-            else if (isNaN(parseInt(csArr[1])) && csArr[1] !== 'T' && csArr[1] !== 'R') {
+            else if (isNaN(parseInt(csArr[1] ?? 0)) && csArr[1] !== 'T' && csArr[1] !== 'R') {
                 error.message += `Callsign "${cs}" is invalid. ${csArr[1]} is not a valid SSID.\n`
             }
             else if (parseInt(csArr[1]) < 0 || parseInt(csArr[1]) > 15) {
