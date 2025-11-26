@@ -5,11 +5,11 @@
 import { EventEmitter, once } from "events";
 import { createConnection, type Socket } from "net";
 
-export type VaraEvent = 'command' | 'data' | 'connected' | 'disconnected' | 'ptt off' | 'ptt on' | 'buffer' | 'pending' | 'cancel pending' | 'busy off' | 'busy on' | 'registered' | 'link registered' | 'link unregistered' | 'i am alive' | 'missing soundcard' | 'cq frame' | 'sn' | 'bitrate' | 'clean tx buffer' | 'version' | 'encryption disabled' | 'encryption ready' | 'unencrypted link' | 'encrypted link' | 'ok' | 'wrong'
+export type VaraEvent = 'command' | 'data' | 'kissData' | 'connected' | 'disconnected' | 'ptt off' | 'ptt on' | 'buffer' | 'pending' | 'cancel pending' | 'busy off' | 'busy on' | 'registered' | 'link registered' | 'link unregistered' | 'i am alive' | 'missing soundcard' | 'cq frame' | 'sn' | 'bitrate' | 'clean tx buffer' | 'version' | 'encryption disabled' | 'encryption ready' | 'unencrypted link' | 'encrypted link' | 'ok' | 'wrong'
 type VaraEventWithoutData = 'disconnected' | 'ptt off' | 'ptt on' | 'pending' | 'cancel pending' | 'busy off' | 'busy on' | 'link registered' | 'link unregistered' | 'encryption disabled' | 'encryption ready' | 'unencrypted link' | 'encrypted link' | 'ok'
 
 /**
- * An object representing the details of a new connection that has been made.
+ * An object representing the details of the new or current connection to a remote station.
  */
 export interface ConnectionData {
     /**
@@ -60,7 +60,7 @@ export interface BitrateData {
 }
 
 /**
- * TODO:
+ * A utility class that binds to the VARA modem's ports and wraps its socket calls as easy to use asynchronous javascript function calls.
  */
 export class VaraJS extends EventEmitter {
 
@@ -348,15 +348,23 @@ export class VaraJS extends EventEmitter {
      * 
      * Data sent between stations is written to and read from this socket. The end of an individual transmission or complete "thought"
      * by many programs such as Winlink is usually marked by an "\r" aka carriage return. Note that when writing directly to this socket,
-     * you must remember to add the "\r" yourself. The send() method appends it automatically if necessary for convenience.
+     * you must remember to add the "\r" yourself.
      */
     public dataSocket: Socket;
+
+    /**
+     * The Socket object that is connected to the KISS port in use by VARA. This will only be defined if you specified a kissPort in the constructor
+     * and you have the KISS interface enabled in your VARA modem. Data events from this socket are re-emitted on the VaraJS object as 'kissData' events
+     * for convenience, but are functionally equivalent.
+     */
+    public kissSocket: Socket | undefined
 
     /**
      * Many applications like Winlink use an "\r" aka a carriage return to signify the end of an individual transmission or a complete "thought".
      * Setting this to true and setting an encoding (usually utf8) will cause 'data' events on the VaraJS instance that are of a string type to only be emitted fully assembled
      * after a carriage return has been received. This makes working with small amounts of data much easier but should be used with caution
      * as it can be more memory intensive. If memory is a concern, consider working with the dataSocket directly using Node's streams API instead.
+     * @default true
      */
     public concatenateData: boolean
 
@@ -405,6 +413,11 @@ export class VaraJS extends EventEmitter {
          * @default true
          */
         concatenateData?: boolean
+        /**
+         * If it's enabled in VARA you wish to use VARA's KISS interface, specify a port number here and data received on the KISS Socket
+         * will be re-emitted on the VaraJS object as 'kissData' events.
+         */
+        kissPort?: number
     }): VaraJS
     public static async new(args?: {
         /**
@@ -431,12 +444,18 @@ export class VaraJS extends EventEmitter {
         encoding?: BufferEncoding
         /**
          * Many applications like Winlink use an "\r" aka a carriage return to signify the end of an individual transmission or a complete "thought".
-         * Setting this to true and setting an encoding (usually utf8) will cause data that is in string format to only be emitted fully assembled
-         * after a carriage return has been received. This makes working with small amounts of data much easier but should be used with caution
-         * as it can be more memory intensive. If memory is a concern, consider working with the dataSocket direcly using Node's streams API instead.
+         * Setting this to true and setting an encoding (usually utf8) will cause data that is in string format to only be emitted via events when
+         * it is fully assembled after a carriage return has been received. This makes working with small amounts of data much easier,
+         * but should be used with caution as it can be more memory intensive with larger amounts of data and/or on low resource systems.
+         * If memory is a concern, consider working with the dataSocket direcly using Node's streams API instead.
          * @default true
          */
         concatenateData?: boolean
+        /**
+         * If it's enabled in VARA you wish to use VARA's KISS interface, specify a port number here and data received on the KISS Socket
+         * will be re-emitted on the VaraJS object as 'kissData' events.
+         */
+        kissPort?: number
     }): Promise<VaraJS>
     public static new(args?: {
         /**
@@ -463,15 +482,21 @@ export class VaraJS extends EventEmitter {
         encoding?: BufferEncoding
         /**
          * Many applications like Winlink use an "\r" aka a carriage return to signify the end of an individual transmission or a complete "thought".
-         * Setting this to true and setting an encoding (usually utf8) will cause data that is in string format to only be emitted fully assembled
-         * after a carriage return has been received. This makes working with small amounts of data much easier but should be used with caution
-         * as it can be more memory intensive. If memory is a concern, consider working with the dataSocket directly using Node's streams API instead.
+         * Setting this to true and setting an encoding (usually utf8) will cause data that is in string format to only be emitted via events when
+         * it is fully assembled after a carriage return has been received. This makes working with small amounts of data much easier,
+         * but should be used with caution as it can be more memory intensive with larger amounts of data and/or on low resource systems.
+         * If memory is a concern, consider working with the dataSocket direcly using Node's streams API instead.
          * @default true
          */
         concatenateData?: boolean
+        /**
+         * If it's enabled in VARA you wish to use VARA's KISS interface, specify a port number here and data received on the KISS Socket
+         * will be re-emitted on the VaraJS object as 'kissData' events.
+         */
+        kissPort?: number
     }): VaraJS | Promise<VaraJS> {
         args ??= {}
-        const vj: VaraJS = new VaraJS(args.host ?? 'localhost', args.commandPort ?? 8300, args.concatenateData ?? true, args.encoding)
+        const vj: VaraJS = new VaraJS(args.host ?? 'localhost', args.commandPort ?? 8300, args.concatenateData ?? true, args.encoding, args.kissPort)
 
         if (args.varaType) {
             vj.varaType = args.varaType
@@ -483,16 +508,7 @@ export class VaraJS extends EventEmitter {
         })
     }
 
-    // private static errorMessage(message: string): string
-    // private static errorMessage(lastFunction: Function, lastFunctionArgs: IArguments): string
-    // private static errorMessage(messageOrLastFunction: string | Function, lastFunctionArgs?: IArguments): string {
-    //     if (typeof messageOrLastFunction === 'string') {
-    //         return messageOrLastFunction
-    //     }
-    //     return `VARA returned wrong for ${messageOrLastFunction.name}(${Array.from(lastFunctionArgs ?? [])}).\nCheck your arguments, the order of your function calls, and that this command is compatible with the currently running version of VARA.`
-    // }
-
-    private constructor(host: string, commandPort: number, concatenateData: boolean, encoding?: BufferEncoding) {
+    private constructor(host: string, commandPort: number, concatenateData: boolean, encoding?: BufferEncoding, kissPort?: number) {
 
         super()
 
@@ -683,6 +699,13 @@ export class VaraJS extends EventEmitter {
                 }
             })
         })
+
+        if (kissPort) {
+            this.kissSocket = createConnection({
+                host,
+                port: kissPort
+            }).on('data', (data: Buffer) => this.emit('kissData', data))
+        }
     }
 
     /**
@@ -714,7 +737,8 @@ export class VaraJS extends EventEmitter {
             return result as ConnectionData
         }
         else if (result instanceof Error) {
-            return Promise.reject(result)        }
+            return Promise.reject(result)
+        }
         return Promise.reject(new Error(`VARA was unable to make a connection from ${source} to ${destination}.`))
     }
 
@@ -789,8 +813,6 @@ export class VaraJS extends EventEmitter {
             }
         })
         if (error.message !== '') {
-            // TODO:
-            // this.emit('WRONG', error)
             return Promise.reject(error)
         }
         return once(this, 'registered')
@@ -1087,19 +1109,6 @@ export class VaraJS extends EventEmitter {
         this.lastFunc = this.cleanTxBuffer
         this.lastArgs = arguments
         this.commandSocket.write('CLEANTXBUFFER\r')
-        // return new Promise((resolve, reject) => {
-        //     this.once('CLEANTXBUFFER', (status) => {
-        //         if (status === 'OK' || status === 'BUFFEREMPTY') {
-        //             resolve(status)
-        //             this.buffer = 0
-        //         }
-        //         else if (status === 'FAILED') {
-        //             reject('Unable to erase the TX Buffer at the moment.')
-        //         }
-        //     })
-        // })
-
-        // TODO: TEST THIS MORE CONCISE VERSION AND SEE IF IT WORKS
         const status: 'failed' | 'bufferEmpty' | 'ok' = (await once(this, 'clean tx buffer'))[0]
         if (status === 'failed') {
             return Promise.reject('Unable to erase the TX Buffer at the moment.')
@@ -1119,35 +1128,8 @@ export class VaraJS extends EventEmitter {
         return (await once(this, 'version'))[0]
     }
 
-
     /**
-     * Writes data to the VARA dataSocket. The second parameter specifies the encoding in the case of a string. It defaults to UTF8 encoding.
-     * 
-     * Returns true if the entire data was flushed successfully to the kernel buffer. Returns false if all or part of the data was queued in user memory.
-     * 
-     * The optional callback parameter will be executed when the data is finally written out, which may not be immediately.
-     * 
-     * If an error occurs, the callback will be called with the error as its first argument. The callback is called asynchronously.
-     * 
-     * See Writable stream write() method for more information.
-     * 
-     * In addition to the usual stream behavior, this method also appends a "\r" aka carriage return to the end of strings passed to it if necessary.
-     * To avoid this behavior, write directly to the dataSocket object, or pass a Buffer to this method instead of a string.
-     * @param buffer the data to write to the socket either as a string or a Uint8Array
-     * @param encoding the encoding if using a string. Default is 'utf8'
-     * @param cb an optional callback to execute after finishing writing the data. If an error occurs, it will be the first argument.
-     */
-    public send(buffer: Uint8Array | string, encoding?: BufferEncoding, cb?: (err?: Error) => void): boolean {
-        this.lastFunc = this.send
-        this.lastArgs = arguments
-        if (typeof buffer === 'string' && !buffer.endsWith('\r')) {
-            buffer += '\r'
-        }
-        return this.dataSocket.write(buffer, encoding, cb)
-    }
-
-    /**
-     * Half-closes the commandSocket and dataSocket. i.e., it sends a FIN packet. It is possible the server will still send some data.
+     * Half-closes the commandSocket, dataSocket, and kissSocket (if applicable). i.e., it sends a FIN packet. It is possible the server will still send some data.
      * @see Writable.end() in the streams API for further details.
      */
     public end(): void {
@@ -1155,6 +1137,7 @@ export class VaraJS extends EventEmitter {
         this.lastArgs = arguments
         this.commandSocket.end()
         this.dataSocket.end()
+        this.kissSocket?.end()
     }
 
     /**
@@ -1174,7 +1157,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1184,7 +1167,7 @@ export class VaraJS extends EventEmitter {
      * })
      * ```
      */
-    public on(eventName: 'data', listener: (data: Buffer) => void): this
+    public override on(eventName: 'data', listener: (data: Buffer) => void): this
     /**
      * Adds an event listener for data being received by the modem.
      * @param listener a callback function that provides the data received in the form of a string.
@@ -1194,7 +1177,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1205,7 +1188,7 @@ export class VaraJS extends EventEmitter {
      * ```
      * @overload
      */
-    public on(eventName: 'data', listener: (data: string) => void): this
+    public override on(eventName: 'data', listener: (data: string) => void): this
     /**
      * Adds an event listener for a command or status change being announced by the modem.
      * @param listener a callback function that provides the command or status change received in the form of a string.
@@ -1215,7 +1198,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1225,7 +1208,7 @@ export class VaraJS extends EventEmitter {
      * })
      * ```
      */
-    public on(eventName: 'command', listener: (command: string) => void): this
+    public override on(eventName: 'command', listener: (command: string) => void): this
     /**
      * Adds an event listener for a WRONG event. VARA emits these when an unprocessable command is issued to it.
      * Error handling style is left up to the individual developer and errors are not thrown automatically when this event is emitted.
@@ -1236,7 +1219,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1246,14 +1229,14 @@ export class VaraJS extends EventEmitter {
      * })
      * ```
      */
-    public on(eventName: 'wrong', listener: (err: Error) => void): this
+    public override on(eventName: 'wrong', listener: (err: Error) => void): this
     /**
      * Adds an event listener for the event. 
      * @param listener a callback function to execute every time the event happens.
      * @returns a reference to the VaraJS instance, so that calls can be chained.
      * @overload
      */
-    public on(eventName: VaraEventWithoutData, listener: () => void): this
+    public override on(eventName: VaraEventWithoutData, listener: () => void): this
     /**
      * Adds an event listener for the IAMALIVE event, which is emitted by VARA approximately every 60 seconds.
      * @param listener a callback function that provides the unix time in milliseconds of when the command was received from VARA.
@@ -1263,7 +1246,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1273,7 +1256,7 @@ export class VaraJS extends EventEmitter {
      * })
      * ```
      */
-    public on(eventName: 'i am alive', listener: (timestamp: number) => void): this
+    public override on(eventName: 'i am alive', listener: (timestamp: number) => void): this
     /**
      * Adds an event listener for the missing soundcard event, you should check your settings and hardware.
      * @param listener a callback function that provides a standard Error object.
@@ -1283,7 +1266,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1293,7 +1276,7 @@ export class VaraJS extends EventEmitter {
      * })
      * ```
      */
-    public on(eventName: 'missing soundcard', listener: (err: Error) => void): this
+    public override on(eventName: 'missing soundcard', listener: (err: Error) => void): this
     /**
      * Adds an event listener for the cleantxbuffer event, which is emitted as a response to the cleanTxBuffer() method.
      * @see {@link cleanTxBuffer()}
@@ -1304,7 +1287,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1318,7 +1301,7 @@ export class VaraJS extends EventEmitter {
      * vj.cleanTxBuffer()
      * ```
      */
-    public on(eventName: 'clean tx buffer', listener: (status: 'buffer empty' | 'ok' | 'failed') => void): this
+    public override on(eventName: 'clean tx buffer', listener: (status: 'buffer empty' | 'ok' | 'failed') => void): this
     /**
      * Adds an event listener for the VERSION event, which is emitted as a response to calling the version() method.
      * @see {@link version()}
@@ -1329,7 +1312,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1341,7 +1324,7 @@ export class VaraJS extends EventEmitter {
      * vj.version()
      * ```
      */
-    public on(eventName: 'version', listener: (version: string) => void): this
+    public override on(eventName: 'version', listener: (version: string) => void): this
     /**
      * Adds an event listener for the CONNECTED event, which is emitted upon a successful inbound or outbound connection to a remote station.
      * @param listener a callback function that provides a ConnectionData object containing address, bandwidth, and routing information. 
@@ -1352,7 +1335,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS, type ConnectionData } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1364,7 +1347,7 @@ export class VaraJS extends EventEmitter {
      * vj.listenOn()
      * ```
      */
-    public on(eventName: 'connected', listener: (cd: ConnectionData) => void): this
+    public override on(eventName: 'connected', listener: (cd: ConnectionData) => void): this
     /**
      * Adds an event listener for the BUFFER event, which is emitted by VARA when VARA adds data to queue or VARA removes acked bytes from queue.
      * @param listener a callback function that provides a number representing the amount of bytes currently in the transmit buffer queue.
@@ -1374,7 +1357,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1385,7 +1368,7 @@ export class VaraJS extends EventEmitter {
      * })
      * ```
      */
-    public on(eventName: 'buffer', listener: (bytes: number) => void): this
+    public override on(eventName: 'buffer', listener: (bytes: number) => void): this
     /**
      * Adds an event listener for the REGISTERED event, which is emitted by VARA when callsigns have successfully been registered in VARA.
      * @param listener a callback function that provides an array of callsigns that were successfully registered in VARA.
@@ -1395,7 +1378,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1408,7 +1391,7 @@ export class VaraJS extends EventEmitter {
      * vj.myCall('KO4LCM KO4LCM-1') // also acceptable
      * ```
      */
-    public on(eventName: 'registered', listener: (calls: string[]) => void): this
+    public override on(eventName: 'registered', listener: (calls: string[]) => void): this
     /**
      * Adds an event listener for the CQFRAME event, which is emitted by VARA when it has received a CQ from another station.
      * @param listener a callback function that provides a CQFrameData object containing address, bandwidth, and routing information.
@@ -1419,7 +1402,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS, type CQFrameData } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1434,7 +1417,7 @@ export class VaraJS extends EventEmitter {
      * })
      * ```
      */
-    public on(eventName: 'cq frame', listener: (cq: CQFrameData) => void): this
+    public override on(eventName: 'cq frame', listener: (cq: CQFrameData) => void): this
     /**
      * Adds an event listener for the SN event, which is emitted by VARA when it has received a frame.
      * @param listener a callback function that provides a number representing the signal to noise ratio of the most recently received frame.
@@ -1444,7 +1427,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1454,7 +1437,7 @@ export class VaraJS extends EventEmitter {
      * })
      * ```
      */
-    public on(eventName: 'sn', listener: (sn: number) => void): this
+    public override on(eventName: 'sn', listener: (sn: number) => void): this
     /**
      * Adds an event listener for the BITRATE event, which is emitted by VARA when it has an updated current bitrate and/or speed level.
      * @param listener a callback function that provides a BitrateData object, containing an sl and bps property representing the current speed level and bits per second, respectively.
@@ -1465,7 +1448,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS, type BitrateData } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1475,8 +1458,31 @@ export class VaraJS extends EventEmitter {
      * })
      * ```
      */
-    public on(eventName: 'bitrate', listener: (br: BitrateData) => void): this
-    public on(eventName: VaraEvent, listener: (...args: any) => void): this {
+    public override on(eventName: 'bitrate', listener: (br: BitrateData) => void): this
+    /**
+     * Adds an event listener for the kissData event, which is emitted by the VaraJS onject when data is received on Vara's KISS Socket.
+     * @param listener a callback function that provides the data received as a Buffer. The data represents an encoded UI frame, use a library like jsax25
+     * to decode it.
+     * @returns a reference to the VaraJS instance, so that calls can be chained.
+     * @overload
+     * @example
+     * ```ts
+     * import { VaraJS } from "./";
+     * import { IncomingFrame } from "jsax25";
+     * 
+     * const vjs: VaraJS = await VaraJS.new({
+     *      host: 'localhost',
+     *      commandPort: 8300
+     * })
+     * 
+     * vjs.on('kissData', (data: Buffer) => {
+     *      const frame: IncomingFrame = new IncomingFrame(data)
+     *      console.log(`Received a KISS frame from ${frame.sourceCallsign}`)
+     * })
+     * ```
+     */
+    public override on(eventName: 'kissData', listener: (data: Buffer) => void): this
+    public override on(eventName: VaraEvent, listener: (...args: any) => void): this {
         return super.on(eventName, listener)
     }
 
@@ -1489,7 +1495,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1499,7 +1505,7 @@ export class VaraJS extends EventEmitter {
      * })
      * ```
      */
-    public once(eventName: 'data', listener: (data: Buffer) => void): this
+    public override once(eventName: 'data', listener: (data: Buffer) => void): this
     /**
      * Adds a **one-time** event listener for data being received by the modem.
      * @param listener a callback function that provides the data received in the form of a string.
@@ -1509,7 +1515,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1519,7 +1525,7 @@ export class VaraJS extends EventEmitter {
      * })
      * ```
      */
-    public once(eventName: 'data', listener: (data: string) => void): this
+    public override once(eventName: 'data', listener: (data: string) => void): this
     /**
      * Adds a **one-time** event listener for a command or status change being announced by the modem.
      * @param listener a callback function that provides the command or status change received in the form of a string.
@@ -1529,7 +1535,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1539,7 +1545,7 @@ export class VaraJS extends EventEmitter {
      * })
      * ```
      */
-    public once(eventName: 'command', listener: (command: string) => void): this
+    public override once(eventName: 'command', listener: (command: string) => void): this
     /**
      * Adds a **one-time** event listener for a WRONG event. VARA emits these when an unprocessable command is issued to it.
      * Error handling style is left up to the individual developer and errors are not thrown automatically when this event is emitted.
@@ -1550,7 +1556,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1560,14 +1566,14 @@ export class VaraJS extends EventEmitter {
      * })
      * ```
      */
-    public once(eventName: 'wrong', listener: (err: Error) => void): this
+    public override once(eventName: 'wrong', listener: (err: Error) => void): this
     /**
      * Adds a **one-time** event listener for the event. 
      * @param listener a callback function to execute every time the event happens.
      * @returns a reference to the VaraJS instance, so that calls can be chained.
      * @overload
      */
-    public once(eventName: VaraEventWithoutData, listener: () => void): this
+    public override once(eventName: VaraEventWithoutData, listener: () => void): this
     /**
      * Adds a **one-time** event listener for the IAMALIVE event, which is emitted by VARA approximately every 60 seconds.
      * @param listener a callback function that provides the unix time in milliseconds of when the command was received from VARA.
@@ -1577,7 +1583,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1587,7 +1593,7 @@ export class VaraJS extends EventEmitter {
      * })
      * ```
      */
-    public once(eventName: 'i am alive', listener: (timestamp: number) => void): this
+    public override once(eventName: 'i am alive', listener: (timestamp: number) => void): this
     /**
      * Adds a **one-time** event listener for the missing soundcard event, you should check your settings and hardware.
      * @param listener a callback function that provides a standard Error object.
@@ -1597,7 +1603,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1607,7 +1613,7 @@ export class VaraJS extends EventEmitter {
      * })
      * ```
      */
-    public once(eventName: 'missing soundcard', listener: (err: Error) => void): this
+    public override once(eventName: 'missing soundcard', listener: (err: Error) => void): this
     /**
      * Adds a **one-time** event listener for the CLEANTXBUFFER event, which is emitted as a response to the cleanTxBuffer() method.
      * @param listener a callback function that provides the status of the tx buffer.
@@ -1617,7 +1623,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1631,7 +1637,7 @@ export class VaraJS extends EventEmitter {
      * vj.cleanTxBuffer()
      * ```
      */
-    public once(eventName: 'clean tx buffer', listener: (status: 'buffer empty' | 'ok' | 'failed') => void): this
+    public override once(eventName: 'clean tx buffer', listener: (status: 'buffer empty' | 'ok' | 'failed') => void): this
     /**
      * Adds a **one-time** event listener for the VERSION event, which is emitted as a response to calling the version() method.
      * @param listener a callback function that provides the current version of VARA as a string.
@@ -1641,7 +1647,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1653,7 +1659,7 @@ export class VaraJS extends EventEmitter {
      * vj.version()
      * ```
      */
-    public once(eventName: 'version', listener: (version: string) => void): this
+    public override once(eventName: 'version', listener: (version: string) => void): this
     /**
      * Adds a **one-time** event listener for the CONNECTED event, which is emitted upon a successful inbound or outbound connection to a remote station.
      * @param listener a callback function that provides a ConnectionData object containing address, bandwidth, and routing information. 
@@ -1664,7 +1670,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS, type ConnectionData } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1676,7 +1682,7 @@ export class VaraJS extends EventEmitter {
      * vj.listenOn()
      * ```
      */
-    public once(eventName: 'connected', listener: (cd: ConnectionData) => void): this
+    public override once(eventName: 'connected', listener: (cd: ConnectionData) => void): this
     /**
      * Adds a **one-time** event listener for the BUFFER event, which is emitted by VARA when VARA adds data to queue or VARA removes acked bytes from queue.
      * @param listener a callback function that provides a number representing the amount of bytes currently in the transmit buffer queue.
@@ -1686,7 +1692,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1697,7 +1703,7 @@ export class VaraJS extends EventEmitter {
      * })
      * ```
      */
-    public once(eventName: 'buffer', listener: (bytes: number) => void): this
+    public override once(eventName: 'buffer', listener: (bytes: number) => void): this
     /**
      * Adds a **one-time** event listener for the REGISTERED event, which is emitted by VARA when callsigns have successfully been registered in VARA.
      * @param listener a callback function that provides an array of callsigns that were successfully registered in VARA.
@@ -1707,7 +1713,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1720,7 +1726,7 @@ export class VaraJS extends EventEmitter {
      * vj.myCall('KO4LCM KO4LCM-1') // also acceptable
      * ```
      */
-    public once(eventName: 'registered', listener: (calls: string[]) => void): this
+    public override once(eventName: 'registered', listener: (calls: string[]) => void): this
     /**
      * Adds a **one-time** event listener for the CQFRAME event, which is emitted by VARA when it has received a CQ from another station.
      * @param listener a callback function that provides a CQFrameData object containing address, bandwidth, and routing information.
@@ -1731,7 +1737,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS, type CQFrameData } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1746,7 +1752,7 @@ export class VaraJS extends EventEmitter {
      * })
      * ```
      */
-    public once(eventName: 'cq frame', listener: (cq: CQFrameData) => void): this
+    public override once(eventName: 'cq frame', listener: (cq: CQFrameData) => void): this
     /**
      * Adds a **one-time** event listener for the SN event, which is emitted by VARA when it has received a frame.
      * @param listener a callback function that provides a number representing the signal to noise ratio of the most recently received frame.
@@ -1756,7 +1762,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1766,7 +1772,7 @@ export class VaraJS extends EventEmitter {
      * })
      * ```
      */
-    public once(eventName: 'sn', listener: (sn: number) => void): this
+    public override once(eventName: 'sn', listener: (sn: number) => void): this
     /**
      * Adds a **one-time** event listener for the BITRATE event, which is emitted by VARA when it has an updated current bitrate and/or speed level.
      * @param listener a callback function that provides a BitrateData object, containing an sl and bps property representing the current speed level and bits per second, respectively.
@@ -1777,7 +1783,7 @@ export class VaraJS extends EventEmitter {
      * ```ts
      * import { VaraJS, type BitrateData } from "varajs";
      * 
-     * const vjs: VaraJS = await VaraJS.bindModem({
+     * const vjs: VaraJS = await VaraJS.new({
      *     host: 'localhost',
      *     commandPort: 8300,
      * })
@@ -1787,30 +1793,53 @@ export class VaraJS extends EventEmitter {
      * })
      * ```
      */
-    public once(eventName: 'bitrate', listener: (br: BitrateData) => void): this
+    public override once(eventName: 'bitrate', listener: (br: BitrateData) => void): this
+    /**
+     * Adds a **one-time** event listener for the kissData event, which is emitted by the VaraJS onject when data is received on Vara's KISS Socket.
+     * @param listener a callback function that provides the data received as a Buffer. The data represents an encoded UI frame, use a library like jsax25
+     * to decode it.
+     * @returns a reference to the VaraJS instance, so that calls can be chained.
+     * @overload
+     * @example
+     * ```ts
+     * import { VaraJS } from "./";
+     * import { IncomingFrame } from "jsax25";
+     * 
+     * const vjs: VaraJS = await VaraJS.new({
+     *      host: 'localhost',
+     *      commandPort: 8300
+     * })
+     * 
+     * vjs.once('kissData', (data: Buffer) => {
+     *      const frame: IncomingFrame = new IncomingFrame(data)
+     *      console.log(`Received a KISS frame from ${frame.sourceCallsign}`)
+     * })
+     * ```
+     */
+    public override once(eventName: 'kissData', listener: (data: Buffer) => void): this
 
     // implementation
-    public once(eventName: VaraEvent, listener: (...args: any) => void): this {
+    public override once(eventName: VaraEvent, listener: (...args: any) => void): this {
         return super.once(eventName, listener)
     }
 
     // left in place because they make type checking during library development easier
-    public emit<K>(eventName: 'data', data: string | Buffer): boolean
-    public emit<K>(eventName: 'command', command: string): boolean
-    public emit<K>(eventName: 'wrong', err: Error): boolean
-    public emit<K>(eventName: VaraEventWithoutData): boolean
-    public emit<K>(eventName: 'i am alive', timestamp: number): boolean
-    public emit<K>(eventName: 'missing soundcard', err: Error): boolean
-    public emit<K>(eventName: 'clean tx buffer', status: 'buffer empty' | 'ok' | 'failed'): boolean
-    public emit<K>(eventName: 'version', version: string): boolean
-    public emit<K>(eventName: 'connected', cd: ConnectionData): boolean
-    public emit<K>(eventName: 'buffer', bytes: number): boolean
-    public emit<K>(eventName: 'registered', calls: string[]): boolean
-    public emit<K>(eventName: 'cq frame', cd: CQFrameData): boolean
-    public emit<K>(eventName: 'sn', sn: number): boolean
-    public emit<K>(eventName: 'bitrate', br: BitrateData): boolean
-    public emit<K>(eventName: VaraEvent, ...args: any): boolean {
-        return super.emit<K>(eventName, ...args)
-    }
-
+    // public override emit<K>(eventName: 'data', data: string | Buffer): boolean
+    // public override emit<K>(eventName: 'command', command: string): boolean
+    // public override emit<K>(eventName: 'wrong', err: Error): boolean
+    // public override emit<K>(eventName: VaraEventWithoutData): boolean
+    // public override emit<K>(eventName: 'i am alive', timestamp: number): boolean
+    // public override emit<K>(eventName: 'missing soundcard', err: Error): boolean
+    // public override emit<K>(eventName: 'clean tx buffer', status: 'buffer empty' | 'ok' | 'failed'): boolean
+    // public override emit<K>(eventName: 'version', version: string): boolean
+    // public override emit<K>(eventName: 'connected', cd: ConnectionData): boolean
+    // public override emit<K>(eventName: 'buffer', bytes: number): boolean
+    // public override emit<K>(eventName: 'registered', calls: string[]): boolean
+    // public override emit<K>(eventName: 'cq frame', cd: CQFrameData): boolean
+    // public override emit<K>(eventName: 'sn', sn: number): boolean
+    // public override emit<K>(eventName: 'bitrate', br: BitrateData): boolean
+    // public override emit<K>(eventName: 'kissData', data: Buffer): boolean
+    // public override emit<K>(eventName: VaraEvent, ...args: any): boolean {
+    //     return super.emit<K>(eventName, ...args)
+    // }
 }

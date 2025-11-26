@@ -1,24 +1,24 @@
 {
   "name": "varajs",
-  "module": "index.ts",
-  "type": "module",
   "version": "1.0.0",
-  "description": "A set of javascript bindings for the popular VARA software modem.",
-  "main": "index.js",
+  "author": "Taylor Reid",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/taylorsreid/varajs.git"
+  },
+  "main": "dist/index.js",
+  "module": "index.ts",
   "devDependencies": {
     "@types/bun": "^1.3.3",
     "@types/node": "^20.14.9",
     "typedoc": "^0.28.4",
     "typescript": "^5.5.2"
   },
-  "scripts": {
-    "build": "bun tsc && bun build ./index.ts --outdir ./dist --target node --sourcemap=linked",
-    "test": "bun test tests"
+  "bugs": {
+    "url": "https://github.com/taylorsreid/varajs/issues"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/taylorsreid/varajs.git"
-  },
+  "description": "A set of javascript bindings for the popular VARA software modem.",
+  "homepage": "https://github.com/taylorsreid/varajs#readme",
   "keywords": [
     "vara",
     "ham",
@@ -29,10 +29,12 @@
     "sat",
     "amateur"
   ],
-  "author": "Taylor Reid",
-  "license": "GPL-3.0-or-later",
-  "bugs": {
-    "url": "https://github.com/taylorsreid/varajs/issues"
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "tsc",
+    "typedoc": "typedoc index.ts --exclude \"scratch.ts tests.test.ts\" --html docs"
   },
-  "homepage": "https://github.com/taylorsreid/varajs#readme"
+  "type": "module",
+  "types": "dist/index.d.ts"
 }
