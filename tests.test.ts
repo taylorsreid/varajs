@@ -1,46 +1,32 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { Socket } from 'net';
-import { setTimeout } from 'timers/promises';
 import { VaraJS } from './';
 
-// 
-const HOST: string = '127.0.0.1'
-
-// 
-const PORT: number = 8300
-
-// 
-const VARA_PATH: string = 'C:\\VARA FM\\VARAFM.exe'
-
-// 
-const VARA_TYPE: 'fm' | 'hf' | 'sat' = 'fm'
-
-// 
-const CALLSIGN: string = 'KO4LCM'
-
-//
-const ENCODING: BufferEncoding = 'utf8'
-
-// 
-const STARTUP_TIMEOUT: number = 2000
-
-// 
-const VERBOSE: boolean = false
-
-/////////////////////////////////////////////////////////////////////
-
+let callsign: string
+let encoding: BufferEncoding
+let host: string
+let commandPort: number
+let startupTimeout: number
+let varaPath: string
+let varaType: 'fm' | 'hf' | 'sat'
+let verbose
 let vjs: VaraJS
 
 beforeAll(async () => {
-    Bun.spawn([VARA_PATH])
-    await setTimeout(STARTUP_TIMEOUT)
-    vjs = await VaraJS.new({
-        host: HOST,
-        commandPort: PORT,
-        encoding: ENCODING,
-        concatenateData: true
-    })
-    if (VERBOSE) {
+    // set your test variables here
+    callsign= 'N0CALL'
+    encoding = 'utf8'
+    host = '127.0.0.1'
+    commandPort = 8300
+    startupTimeout = 2000
+    varaPath = 'C:\\VARA FM\\VARAFM.exe'
+    varaType = 'fm'
+    verbose = false
+
+    Bun.spawn([varaPath])
+    await Bun.sleep(startupTimeout)
+    vjs = await VaraJS.new({ host, commandPort, encoding })
+    if (verbose) {
         vjs.on('command', (c: string) => {
             console.log('Command: ' + c)
         })
@@ -48,7 +34,12 @@ beforeAll(async () => {
             console.log('Data: ' + data)
         })
     }
+    await vjs.myCall(callsign)
+})
 
+afterAll(() => vjs.end())
+
+describe('state mutations', () => {
     test('initial state', () => {
         expect(vjs).toBeInstanceOf(VaraJS)
         // expect(vb.encoding).toBe(ENCODING) // fails in bun due to an upstream bug, but works in node
@@ -79,30 +70,23 @@ beforeAll(async () => {
         expect(vjs.bitrate).toBeUndefined()
         expect(vjs.encryption).toBeFalse()
         expect(vjs.encryptedLink).toBeFalse()
-        expect(vjs.varaType).toBe(VARA_TYPE)
+        expect(vjs.varaType).toBe(varaType)
 
         expect(vjs.commandSocket).toBeInstanceOf(Socket)
-        expect(vjs.commandSocket.remoteAddress).toBe(HOST)
-        expect(vjs.commandSocket.remotePort).toBe(PORT)
+        expect(vjs.commandSocket.remoteAddress).toBe(host)
+        expect(vjs.commandSocket.remotePort).toBe(commandPort)
         expect(vjs.commandSocket.readableEncoding).toBe('utf8')
 
         expect(vjs.dataSocket).toBeInstanceOf(Socket)
-        expect(vjs.dataSocket.remoteAddress).toBe(HOST)
-        expect(vjs.dataSocket.remotePort).toBe(PORT + 1)
-        expect(vjs.dataSocket.readableEncoding).toBe(ENCODING)
+        expect(vjs.dataSocket.remoteAddress).toBe(host)
+        expect(vjs.dataSocket.remotePort).toBe(commandPort + 1)
+        expect(vjs.dataSocket.readableEncoding).toBe(encoding)
         expect(vjs.concatenateData).toBeTrue()
 
         expect(vjs.kissSocket).toBeInstanceOf(Socket)
-        expect(vjs.kissSocket?.remoteAddress).toBe(HOST)
+        expect(vjs.kissSocket?.remoteAddress).toBe(host)
     })
-    await vjs.myCall(CALLSIGN)
-})
 
-afterAll(() => {
-    vjs.end()
-})
-
-describe('state mutations', () => {
     describe(`listen functions and .listening`, () => {
         test(`listenOn()`, async () => {
             await vjs.listenOn()
@@ -128,7 +112,7 @@ describe('state mutations', () => {
         })
     })
     // @ts-ignore
-    describe.if(VARA_TYPE === 'HF')(`bandwidth functions and .bw`, () => {
+    describe.if(varaType === 'HF')(`bandwidth functions and .bw`, () => {
         test(`bw500()`, async () => {
             await vjs.bw500()
             expect(vjs.bw).toBe(500)
@@ -153,14 +137,14 @@ describe('state mutations', () => {
         })
     })
     // @ts-ignore
-    describe.if(VARA_TYPE === 'HF' || VARA_TYPE === 'SAT')(`session functions and .session`, () => {
+    describe.if(varaType === 'HF' || varaType === 'SAT')(`session functions and .session`, () => {
         // @ts-ignore
-        test.if(VARA_TYPE === 'HF' || VARA_TYPE === 'SAT')(`p2pSession()`, async () => {
+        test.if(varaType === 'HF' || varaType === 'SAT')(`p2pSession()`, async () => {
             await vjs.p2pSession()
             expect(vjs.session).toBe('p2p')
         })
         // @ts-ignore
-        test.if(VARA_TYPE === 'HF' || VARA_TYPE === 'SAT')(`winlinkSession()`, async () => {
+        test.if(varaType === 'HF' || varaType === 'SAT')(`winlinkSession()`, async () => {
             await vjs.winlinkSession()
             expect(vjs.session).toBe('winlink')
         })
@@ -169,24 +153,24 @@ describe('state mutations', () => {
     describe(`myCall() and .registered`, () => {
         // vara is very slow to register callsigns, set a very long timeout or else the test may fail
         test(`accepts multiple callsigns as strings`, async () => {
-            await vjs.myCall(`${CALLSIGN} ${CALLSIGN}-15`)
-            expect(vjs.registered).toEqual([CALLSIGN, `${CALLSIGN}-15`])
+            await vjs.myCall(`${callsign} ${callsign}-15`)
+            expect(vjs.registered).toEqual([callsign, `${callsign}-15`])
         }, 10_000)
         test(`accepts a single callsign as an array`, async () => {
-            await vjs.myCall([CALLSIGN])
-            expect(vjs.registered).toEqual([CALLSIGN])
+            await vjs.myCall([callsign])
+            expect(vjs.registered).toEqual([callsign])
         }, 10_000)
         test(`accepts multiple callsigns as an array`, async () => {
-            await vjs.myCall([CALLSIGN, `${CALLSIGN}-14`])
-            expect(vjs.registered).toEqual([CALLSIGN, `${CALLSIGN}-14`])
+            await vjs.myCall([callsign, `${callsign}-14`])
+            expect(vjs.registered).toEqual([callsign, `${callsign}-14`])
         }, 10_000)
         test(`accepts a single callsign as a string`, async () => {
-            await vjs.myCall(CALLSIGN)
-            expect(vjs.registered).toEqual([CALLSIGN])
+            await vjs.myCall(callsign)
+            expect(vjs.registered).toEqual([callsign])
         }, 10_000)
     })
     // @ts-ignore
-    describe.if(VARA_TYPE === 'HF' || VARA_TYPE === 'SAT')(`tune functions`, async () => {
+    describe.if(varaType === 'HF' || varaType === 'SAT')(`tune functions`, async () => {
         let originalTune: number
         beforeAll(async () => {
             originalTune = await vjs.tune()
@@ -207,5 +191,5 @@ describe('state mutations', () => {
         })
     })
     test(`cleanTxBuffer()`, async () => expect(vjs.cleanTxBuffer()).resolves.toBeOneOf(['bufferEmpty', 'ok', 'failed']))
-    test(`version() returns a version string`, async () => expect(await vjs.version()).toStartWith(`VARA ${VARA_TYPE} v`))
+    test(`version() returns a version string`, async () => expect(await vjs.version()).toStartWith(`VARA ${varaType} v`))
 })
